@@ -1,4 +1,4 @@
-.vs/
+**.vs/
 x64/Debug/
 x64/
 Debug/
@@ -8,3 +8,4 @@ Debug/
 /HW2Solution/.vs/HW2Solution/v17/
 /HW2Solution/.vs/HW2Solution/FileContentIndex/
 /HW2Solution/.vs/HW2Solution/v17/Browse.VC.db
+
