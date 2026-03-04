@@ -37,84 +37,6 @@ static int idealBalancedHeight(int n) {
     return (int)std::ceil(std::log2(n + 1.0));
 }
 
-static void writePPMBarChart(const std::string& filename,
-    int ideal,
-    int ascMean, int descMean, int randMean)
-{
-    // Very simple grayscale bar chart in a PPM image (still "C++ only").
-    const int W = 800;
-    const int H = 450;
-    const int margin = 60;
-
-    auto clamp = [](int x) { return x < 0 ? 0 : (x > 255 ? 255 : x); };
-
-    // background white
-    std::vector<unsigned char> img(W * H * 3, 255);
-
-    auto setPixel = [&](int x, int y, unsigned char c) {
-        if (x < 0 || x >= W || y < 0 || y >= H) return;
-        int idx = (y * W + x) * 3;
-        img[idx + 0] = c;
-        img[idx + 1] = c;
-        img[idx + 2] = c;
-        };
-
-    auto drawRect = [&](int x0, int y0, int x1, int y1, unsigned char c) {
-        if (x0 > x1) std::swap(x0, x1);
-        if (y0 > y1) std::swap(y0, y1);
-        for (int y = y0; y <= y1; y++) {
-            for (int x = x0; x <= x1; x++) {
-                setPixel(x, y, c);
-            }
-        }
-        };
-
-    // find max for scaling
-    int maxH = std::max({ ideal, ascMean, descMean, randMean });
-    maxH = std::max(maxH, 1);
-
-    // axes (gray)
-    drawRect(margin, H - margin, W - margin, H - margin + 2, 180); // x axis
-    drawRect(margin, margin, margin + 2, H - margin, 180); // y axis
-
-    auto yFromValue = [&](int v) {
-        double t = (double)v / (double)maxH;
-        int y = (int)std::round((H - margin) - t * (H - 2 * margin));
-        return y;
-        };
-
-    // ideal line (light gray)
-    int yIdeal = yFromValue(ideal);
-    drawRect(margin, yIdeal, W - margin, yIdeal + 1, 200);
-
-    // bars
-    int barW = 120;
-    int gap = 90;
-    int x1 = margin + 80;
-    int x2 = x1 + barW + gap;
-    int x3 = x2 + barW + gap;
-
-    auto drawBar = [&](int x, int value, unsigned char shade) {
-        int yTop = yFromValue(value);
-        int yBot = H - margin;
-        drawRect(x, yTop, x + barW, yBot, shade);
-        // outline darker
-        drawRect(x, yTop, x + barW, yTop + 2, clamp(shade - 40));
-        drawRect(x, yBot - 2, x + barW, yBot, clamp(shade - 40));
-        drawRect(x, yTop, x + 2, yBot, clamp(shade - 40));
-        drawRect(x + barW - 2, yTop, x + barW, yBot, clamp(shade - 40));
-        };
-
-    drawBar(x1, ascMean, 140);
-    drawBar(x2, descMean, 110);
-    drawBar(x3, randMean, 80);
-
-    // save PPM (P6)
-    std::ofstream out(filename, std::ios::binary);
-    out << "P6\n" << W << " " << H << "\n255\n";
-    out.write(reinterpret_cast<const char*>(img.data()), img.size());
-}
-
 int main() {
     const int N = 10000;
     const int TRIALS = 30;
@@ -131,9 +53,6 @@ int main() {
     std::reverse(descKeys.begin(), descKeys.end());
     randKeys = ascKeys;
 
-    std::ofstream csv("height_trials.csv");
-    csv << "trial,order,height,avg_depth\n";
-
     for (int t = 0; t < TRIALS; t++) {
         unsigned int seed = 1000u + (unsigned int)t;
 
@@ -145,7 +64,6 @@ int main() {
             double d = tr.averageDepth();
             ascHeights.push_back(h);
             ascAvgDepth.push_back(d);
-            csv << t << ",ascending," << h << "," << d << "\n";
         }
 
         // Descending
@@ -156,7 +74,6 @@ int main() {
             double d = tr.averageDepth();
             descHeights.push_back(h);
             descAvgDepth.push_back(d);
-            csv << t << ",descending," << h << "," << d << "\n";
         }
 
         // Random insertion order (shuffle each trial)
@@ -170,11 +87,8 @@ int main() {
             double d = tr.averageDepth();
             randHeights.push_back(h);
             randAvgDepth.push_back(d);
-            csv << t << ",random," << h << "," << d << "\n";
         }
     }
-
-    csv.close();
 
     Stats sAsc = computeStats(ascHeights);
     Stats sDesc = computeStats(descHeights);
@@ -204,12 +118,5 @@ int main() {
         << " min=" << sRand.minv << " max=" << sRand.maxv << "\n";
     std::cout << "  average depth mean=" << meanDepth(randAvgDepth) << "\n\n";
 
-    // Create a tiny bar-chart image (PPM) and leave it in the folder.
-    writePPMBarChart("height_bars.ppm", ideal,
-        (int)std::round(sAsc.mean),
-        (int)std::round(sDesc.mean),
-        (int)std::round(sRand.mean));
-
-    std::cout << "Wrote: height_trials.csv and height_bars.ppm\n";
     return 0;
 }
