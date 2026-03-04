@@ -1,122 +1,148 @@
 #include "Treap.h"
-#include <algorithm>
-#include <cmath>
-#include <fstream>
 #include <iostream>
-#include <numeric>
-#include <random>
-#include <string>
-#include <vector>
+#include <iomanip>
+#include <cstdlib>
+#include <cmath>
+#include <algorithm>
+using namespace std;
 
-struct Stats {
-    double mean = 0.0;
-    double stdev = 0.0;
-    int minv = 0;
-    int maxv = 0;
-};
-
-static Stats computeStats(const std::vector<int>& v) {
-    Stats s;
-    if (v.empty()) return s;
-    s.minv = *std::min_element(v.begin(), v.end());
-    s.maxv = *std::max_element(v.begin(), v.end());
-
-    double sum = 0.0;
-    for (int x : v) sum += x;
-    s.mean = sum / v.size();
-
-    double var = 0.0;
-    for (int x : v) var += (x - s.mean) * (x - s.mean);
-    var /= v.size();
-    s.stdev = std::sqrt(var);
-    return s;
+// Simple shuffle using rand()
+void shuffle(int* arr, int n) {
+    for (int i = n - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        int tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+    }
 }
 
-static int idealBalancedHeight(int n) {
-    // Perfectly balanced binary tree with n nodes has height about ceil(log2(n+1)).
-    return (int)std::ceil(std::log2(n + 1.0));
+int perfectHeight(int n) {
+    // ceil(log2(n+1))
+    int h = 0;
+    int nodes = 1;
+    while (nodes - 1 < n) {
+        h++;
+        nodes *= 2;
+    }
+    return h;
 }
 
 int main() {
+    srand(42);
+
     const int N = 10000;
-    const int TRIALS = 30;
+    const int TRIALS = 10;
 
-    int ideal = idealBalancedHeight(N);
+    int ideal = perfectHeight(N);
 
-    std::vector<int> ascHeights, descHeights, randHeights;
-    std::vector<double> ascAvgDepth, descAvgDepth, randAvgDepth;
+    // Accumulators
+    int   ascHeightSum = 0, descHeightSum = 0, randHeightSum = 0;
+    double ascDepthSum = 0, descDepthSum = 0, randDepthSum = 0;
 
-    // Pre-build key arrays
-    std::vector<int> ascKeys(N), descKeys(N), randKeys(N);
-    for (int i = 0; i < N; i++) ascKeys[i] = i + 1;
-    descKeys = ascKeys;
-    std::reverse(descKeys.begin(), descKeys.end());
-    randKeys = ascKeys;
+    int ascMin = 999999, ascMax = 0;
+    int descMin = 999999, descMax = 0;
+    int randMin = 999999, randMax = 0;
+
+    // Build key arrays
+    int* keys = new int[N];
+    for (int i = 0; i < N; i++) keys[i] = i + 1;
 
     for (int t = 0; t < TRIALS; t++) {
-        unsigned int seed = 1000u + (unsigned int)t;
 
-        // Ascending
+        // --- Ascending ---
         {
-            Treap tr(seed);
-            for (int k : ascKeys) tr.insert(k);
+            Treap tr;
+            for (int i = 0; i < N; i++) tr.insert(i + 1);
             int h = tr.height();
-            double d = tr.averageDepth();
-            ascHeights.push_back(h);
-            ascAvgDepth.push_back(d);
+            ascHeightSum += h;
+            ascDepthSum += tr.averageDepth();
+            if (h < ascMin) ascMin = h;
+            if (h > ascMax) ascMax = h;
         }
 
-        // Descending
+        // --- Descending ---
         {
-            Treap tr(seed);
-            for (int k : descKeys) tr.insert(k);
+            Treap tr;
+            for (int i = N; i >= 1; i--) tr.insert(i);
             int h = tr.height();
-            double d = tr.averageDepth();
-            descHeights.push_back(h);
-            descAvgDepth.push_back(d);
+            descHeightSum += h;
+            descDepthSum += tr.averageDepth();
+            if (h < descMin) descMin = h;
+            if (h > descMax) descMax = h;
         }
 
-        // Random insertion order (shuffle each trial)
+        // --- Random ---
         {
-            std::mt19937 r(seed + 999u);
-            std::shuffle(randKeys.begin(), randKeys.end(), r);
-
-            Treap tr(seed);
-            for (int k : randKeys) tr.insert(k);
+            shuffle(keys, N);
+            Treap tr;
+            for (int i = 0; i < N; i++) tr.insert(keys[i]);
             int h = tr.height();
-            double d = tr.averageDepth();
-            randHeights.push_back(h);
-            randAvgDepth.push_back(d);
+            randHeightSum += h;
+            randDepthSum += tr.averageDepth();
+            if (h < randMin) randMin = h;
+            if (h > randMax) randMax = h;
         }
     }
 
-    Stats sAsc = computeStats(ascHeights);
-    Stats sDesc = computeStats(descHeights);
-    Stats sRand = computeStats(randHeights);
+    delete[] keys;
 
-    auto meanDepth = [](const std::vector<double>& v) {
-        double sum = 0.0;
-        for (double x : v) sum += x;
-        return v.empty() ? 0.0 : sum / v.size();
-        };
+    double ascAvgH = (double)ascHeightSum / TRIALS;
+    double descAvgH = (double)descHeightSum / TRIALS;
+    double randAvgH = (double)randHeightSum / TRIALS;
 
-    std::cout << "Treap height experiment (N=" << N << ", trials=" << TRIALS << ")\n";
-    std::cout << "Perfectly balanced height (approx ceil(log2(N+1))) = " << ideal << "\n\n";
+    double ascAvgD = ascDepthSum / TRIALS;
+    double descAvgD = descDepthSum / TRIALS;
+    double randAvgD = randDepthSum / TRIALS;
 
-    std::cout << "Ascending insert order:\n";
-    std::cout << "  height mean=" << sAsc.mean << " stdev=" << sAsc.stdev
-        << " min=" << sAsc.minv << " max=" << sAsc.maxv << "\n";
-    std::cout << "  average depth mean=" << meanDepth(ascAvgDepth) << "\n\n";
+    cout << "=== Treap Experiment: N=" << N << ", Trials=" << TRIALS << " ===\n\n";
+    cout << "Perfectly balanced height: " << ideal << "\n\n";
 
-    std::cout << "Descending insert order:\n";
-    std::cout << "  height mean=" << sDesc.mean << " stdev=" << sDesc.stdev
-        << " min=" << sDesc.minv << " max=" << sDesc.maxv << "\n";
-    std::cout << "  average depth mean=" << meanDepth(descAvgDepth) << "\n\n";
+    cout << fixed << setprecision(2);
 
-    std::cout << "Random insert order:\n";
-    std::cout << "  height mean=" << sRand.mean << " stdev=" << sRand.stdev
-        << " min=" << sRand.minv << " max=" << sRand.maxv << "\n";
-    std::cout << "  average depth mean=" << meanDepth(randAvgDepth) << "\n\n";
+    cout << left
+        << setw(16) << "Insertion Order"
+        << setw(12) << "Avg Height"
+        << setw(6) << "Min"
+        << setw(6) << "Max"
+        << setw(16) << "Avg Node Depth"
+        << setw(15) << "Ratio to Ideal"
+        << "\n";
+
+    cout << string(16, '-') << string(12, '-') << string(6, '-')
+        << string(6, '-') << string(16, '-') << string(15, '-') << "\n";
+
+    cout << left
+        << setw(16) << "Ascending"
+        << setw(12) << ascAvgH
+        << setw(6) << ascMin
+        << setw(6) << ascMax
+        << setw(16) << ascAvgD
+        << setw(15) << (ascAvgH / ideal)
+        << "\n";
+
+    cout << left
+        << setw(16) << "Descending"
+        << setw(12) << descAvgH
+        << setw(6) << descMin
+        << setw(6) << descMax
+        << setw(16) << descAvgD
+        << setw(15) << (descAvgH / ideal)
+        << "\n";
+
+    cout << left
+        << setw(16) << "Random"
+        << setw(12) << randAvgH
+        << setw(6) << randMin
+        << setw(6) << randMax
+        << setw(16) << randAvgD
+        << setw(15) << (randAvgH / ideal)
+        << "\n";
+
+    cout << "\n--- Analysis ---\n";
+    cout << "Ideal log2(" << N << "+1) height = " << ideal << "\n";
+    cout << "Ascending  height is ~" << (ascAvgH / ideal) << "x ideal\n";
+    cout << "Descending height is ~" << (descAvgH / ideal) << "x ideal\n";
+    cout << "Random     height is ~" << (randAvgH / ideal) << "x ideal\n";
 
     return 0;
 }
